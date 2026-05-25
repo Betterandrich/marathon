@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Marathon Training Plan</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+    // --- Replace with your project values ---
+    const SUPABASE_URL = 'https://xidyfsiqxotfzypxcqkg.supabase.co/rest/v1/'
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhpZHlmc2lxeG90Znp5cHhjcWtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MDczMjcsImV4cCI6MjA5NTI4MzMyN30.8unCWpOMpbHvwuIUkt1Yxc_QgLOJbLHsAW0tWzXkBK4'
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+    const app = document.getElementById('app')
+    let currentUser = null
+    let days = []
+    let workoutLogs = []
+
+    async function init() {
+      const { data: { session } } = await supabase.auth.getSession()
+      currentUser = session?.user ?? null
+      currentUser ? loadDashboard() : renderAuth()
+
+      supabase.auth.onAuthStateChange((_event, session) => {
+        currentUser = session?.user ?? null
+        currentUser ? loadDashboard() : renderAuth()
+      })
+    }
+
+    function renderAuth() {
+      app.innerHTML = `
+        <div class="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+          <div class="w-full max-w-md bg-white rounded-3xl shadow-lg p-8 space-y-4">
+            <h1 class="text-2xl font-semibold">Marathon Plan</h1>
+            <input id="email" class="w-full border rounded-xl p-3" placeholder="Email" />
+            <input id="password" type="password" class="w-full border rounded-xl p-3" placeholder="Password" />
+            <div class="flex gap-3">
+              <button id="loginBtn" class="flex-1 bg-black text-white rounded-xl p-3">Login</button>
+              <button id="signupBtn" class="flex-1 border rounded-xl p-3">Sign up</button>
+            </div>
+          </div>
+        </div>`
+
+      document.getElementById('loginBtn').onclick = async () => {
+        await supabase.auth.signInWithPassword({
+          email: email.value,
+          password: password.value
+        })
+      }
+
+      document.getElementById('signupBtn').onclick = async () => {
+        await supabase.auth.signUp({
+          email: email.value,
+          password: password.value
+        })
+      }
+    }
+
+    async function loadDashboard() {
+      const [{ data: planDays }, { data: logs }] = await Promise.all([
+        supabase.from('days').select('id, day_name, day_date, session_label, content').order('day_date'),
+        supabase.from('workout_logs').select('*').order('updated_at')
+      ])
+
+      days = planDays || []
+      workoutLogs = logs || []
+      renderDashboard()
+    }
+
+    function getLog(dayId, userId) {
+      return workoutLogs.find(l => l.day_id === dayId && l.user_id === userId)
+    }
+
+    async function saveWorkout(dayId, text) {
+      const existing = getLog(dayId, currentUser.id)
+
+      if (existing) {
+        await supabase
+          .from('workout_logs')
+          .update({ actual_workout: text })
+          .eq('id', existing.id)
+      } else {
+        await supabase
+          .from('workout_logs')
+          .insert({
+            day_id: dayId,
+            user_id: currentUser.id,
+            actual_workout: text
+          })
+      }
+
+      loadDashboard()
+    }
+
+    function renderDashboard() {
+      app.innerHTML = `
+        <div class="min-h-screen bg-slate-50 p-6 md:p-10">
+          <div class="max-w-7xl mx-auto">
+            <div class="flex justify-between items-center mb-8">
+              <div>
+                <h1 class="text-3xl font-semibold">Training Plan</h1>
+                <p class="text-slate-500">Logged in as ${currentUser.email}</p>
+              </div>
+              <button id="logoutBtn" class="border px-4 py-2 rounded-xl">Logout</button>
+            </div>
+
+            <div class="overflow-x-auto bg-white rounded-3xl shadow-sm">
+              <table class="w-full text-sm">
+                <thead class="bg-slate-100 text-left">
+                  <tr>
+                    <th class="p-4">Date</th>
+                    <th class="p-4">Suggested Workout</th>
+                    <th class="p-4 min-w-[420px]">Your Actual Workout</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${days.map(day => `
+                    <tr class="border-t align-top">
+                      <td class="p-4 whitespace-nowrap">${day.day_name}<br><span class="text-slate-400">${day.day_date}</span></td>
+                      <td class="p-4">
+                        <div class="font-medium">${day.session_label}</div>
+                        <div class="text-slate-600 mt-1">${day.content}</div>
+                      </td>
+                      <td class="p-4">
+                        <textarea
+                          data-day="${day.id}"
+                          class="w-full min-h-28 border rounded-xl p-3"
+                          placeholder="What did you actually do?"
+                        >${getLog(day.id, currentUser.id)?.actual_workout || ''}</textarea>
+                        <button data-save="${day.id}" class="mt-2 bg-black text-white px-4 py-2 rounded-lg">Save</button>
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>`
+
+      document.getElementById('logoutBtn').onclick = () => supabase.auth.signOut()
+
+      document.querySelectorAll('[data-save]').forEach(btn => {
+        btn.onclick = async () => {
+          const dayId = Number(btn.dataset.save)
+          const textarea = document.querySelector(`[data-day="${dayId}"]`)
+          await saveWorkout(dayId, textarea.value)
+        }
+      })
+    }
+
+    init()
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+</body>
+</html>
+
+<!--
+Create this extra table in Supabase:
+
+create table workout_logs (
+  id bigint generated always as identity primary key,
+  user_id uuid references auth.users on delete cascade not null,
+  day_id integer references days(id) on delete cascade not null,
+  actual_workout text,
+  updated_at timestamptz default now(),
+  unique(user_id, day_id)
+);
+
+Your requested behavior is built in:
+- every user logs in with their own account
+- everyone sees the same suggested workout plan
+- each user gets their own personal 'actual workout' text box per day
+- entries are stored separately by user_id, effectively making each user's own column of notes
+-->

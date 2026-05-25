@@ -61,15 +61,26 @@
     }
 
     async function loadDashboard() {
-      const [{ data: planDays }, { data: logs }] = await Promise.all([
-        supabase.from('days').select('id, day_name, day_date, session_label, content').order('day_date'),
-        supabase.from('workout_logs').select('*').order('updated_at')
-      ])
+  const [{ data: planDays, error: daysError }, { data: logs, error: logsError }] =
+    await Promise.all([
+      supabase
+        .from('days')
+        .select('id, week, phase, day_name, session_type, duration, suggested_workout, date_range')
+        .order('id'),
 
-      days = planDays || []
-      workoutLogs = logs || []
-      renderDashboard()
-    }
+      supabase
+        .from('workout_logs')
+        .select('*')
+        .order('updated_at')
+    ])
+
+  console.log("DAYS ERROR:", daysError)
+  console.log("LOGS ERROR:", logsError)
+
+  days = planDays || []
+  workoutLogs = logs || []
+  renderDashboard()
+}
 
     function getLog(dayId, userId) {
       return workoutLogs.find(l => l.day_id === dayId && l.user_id === userId)
@@ -120,10 +131,10 @@
                 <tbody>
                   ${days.map(day => `
                     <tr class="border-t align-top">
-                      <td class="p-4 whitespace-nowrap">${day.day_name}<br><span class="text-slate-400">${day.day_date}</span></td>
+                      <td class="p-4 whitespace-nowrap">${day.day_name}<br><span class="text-slate-400">${day.date_range}</span></td>
                       <td class="p-4">
-                        <div class="font-medium">${day.session_label}</div>
-                        <div class="text-slate-600 mt-1">${day.content}</div>
+                        <div class="font-medium">${day.session_type}</div>
+                        <div class="text-slate-600 mt-1">${day.suggested_workout}</div>
                       </td>
                       <td class="p-4">
                         <textarea

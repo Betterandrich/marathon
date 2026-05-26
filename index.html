@@ -4,188 +4,762 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Marathon Training Plan</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script type="module">
-        import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    // --- Replace with your project values ---
-    const SUPABASE_URL = 'https://xidyfsiqxotfzypxcqkg.supabase.co/'
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhpZHlmc2lxeG90Znp5cHhjcWtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MDczMjcsImV4cCI6MjA5NTI4MzMyN30.8unCWpOMpbHvwuIUkt1Yxc_QgLOJbLHsAW0tWzXkBK4'
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-
-    console.log("Supabase client initialized:", supabase)
-    
-    const app = document.getElementById('app')
-    let currentUser = null
-    let days = []
-    let workoutLogs = []
-
-    async function init() {
-      const { data: { session } } = await supabase.auth.getSession()
-      currentUser = session?.user ?? null
-      currentUser ? loadDashboard() : renderAuth()
-
-      supabase.auth.onAuthStateChange((_event, session) => {
-        currentUser = session?.user ?? null
-        currentUser ? loadDashboard() : renderAuth()
-      })
+    :root {
+      --bg: #f4f2ee;
+      --surface: #ffffff;
+      --border: #e2dfd8;
+      --text: #1a1917;
+      --muted: #7a7770;
+      --accent: #c84b31;
+      --accent-light: #fdf1ee;
+      --done-bg: #edf7f0;
+      --done-border: #a3d9b1;
+      --done-text: #1e6b3a;
+      --week-header: #1a1917;
+      --tag-base: #e8e5df;
     }
 
-    function renderAuth() {
-      app.innerHTML = `
-        <div class="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-          <div class="w-full max-w-md bg-white rounded-3xl shadow-lg p-8 space-y-4">
-            <h1 class="text-2xl font-semibold">Marathon Plan</h1>
-            <input id="email" class="w-full border rounded-xl p-3" placeholder="Email" />
-            <input id="password" type="password" class="w-full border rounded-xl p-3" placeholder="Password" />
-            <div class="flex gap-3">
-              <button id="loginBtn" class="flex-1 bg-black text-white rounded-xl p-3">Login</button>
-              <button id="signupBtn" class="flex-1 border rounded-xl p-3">Sign up</button>
-            </div>
-          </div>
-        </div>`
-
-      document.getElementById('loginBtn').onclick = async () => {
-        await supabase.auth.signInWithPassword({
-          email: email.value,
-          password: password.value
-        })
-      }
-
-      document.getElementById('signupBtn').onclick = async () => {
-        await supabase.auth.signUp({
-          email: email.value,
-          password: password.value
-        })
-      }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
     }
 
-    async function loadDashboard() {
-  const [{ data: planDays, error: daysError }, { data: logs, error: logsError }] =
-    await Promise.all([
-      supabase
-        .from('days')
-        .select('id, week, phase, day_name, session_type, duration, suggested_workout, date_range')
-        .order('id'),
+    /* ── AUTH ── */
+    .auth-wrap {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+    .auth-card {
+      width: 100%;
+      max-width: 400px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2.5rem;
+    }
+    .auth-card h1 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      letter-spacing: -0.02em;
+    }
+    .auth-card p { color: var(--muted); font-size: 0.875rem; margin-bottom: 1.5rem; }
+    .auth-input {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.75rem 1rem;
+      font-family: inherit;
+      font-size: 0.9rem;
+      background: var(--bg);
+      margin-bottom: 0.75rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .auth-input:focus { border-color: var(--text); }
+    .auth-btns { display: flex; gap: 0.75rem; margin-top: 0.5rem; }
+    .btn-primary {
+      flex: 1;
+      background: var(--text);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 0.75rem;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-outline {
+      flex: 1;
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.75rem;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-outline:hover { background: var(--bg); }
 
-      supabase
-        .from('workout_logs')
-        .select('*')
-        .order('updated_at')
-    ])
-
-  console.log("DAYS ERROR:", daysError)
-  console.log("LOGS ERROR:", logsError)
-
-  days = planDays || []
-  workoutLogs = logs || []
-  renderDashboard()
-}
-
-    function getLog(dayId, userId) {
-      return workoutLogs.find(l => l.day_id === dayId && l.user_id === userId)
+    /* ── LAYOUT ── */
+    .shell {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
     }
 
-    async function saveWorkout(dayId, text) {
-      const existing = getLog(dayId, currentUser.id)
+    /* ── TOPBAR ── */
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 2rem;
+    }
+    .topbar h1 {
+      font-size: 1.6rem;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+    }
+    .topbar .sub { color: var(--muted); font-size: 0.85rem; margin-top: 0.2rem; }
+    .btn-logout {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.45rem 0.9rem;
+      font-family: inherit;
+      font-size: 0.85rem;
+      cursor: pointer;
+      color: var(--muted);
+    }
+    .btn-logout:hover { color: var(--text); border-color: var(--text); }
 
-      if (existing) {
-        await supabase
-          .from('workout_logs')
-          .update({ actual_workout: text })
-          .eq('id', existing.id)
-      } else {
-        await supabase
-          .from('workout_logs')
-          .insert({
-            day_id: dayId,
-            user_id: currentUser.id,
-            actual_workout: text
-          })
-      }
+    /* ── TABS ── */
+    .tabs {
+      display: flex;
+      gap: 0.25rem;
+      margin-bottom: 1.75rem;
+      border-bottom: 2px solid var(--border);
+    }
+    .tab {
+      padding: 0.6rem 1.25rem;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab.active { color: var(--text); border-bottom-color: var(--text); }
 
-      loadDashboard()
+    /* ── WEEK ACCORDION ── */
+    .week-block { margin-bottom: 0.75rem; }
+    .week-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.9rem 1.2rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.12s;
+    }
+    .week-header:hover { background: #faf8f5; }
+    .week-header.open { border-radius: 12px 12px 0 0; border-bottom-color: transparent; }
+    .week-chevron {
+      font-size: 0.75rem;
+      color: var(--muted);
+      transition: transform 0.2s;
+    }
+    .week-header.open .week-chevron { transform: rotate(90deg); }
+    .week-title { font-weight: 600; font-size: 0.95rem; flex: 1; }
+    .week-meta { font-size: 0.8rem; color: var(--muted); font-family: 'DM Mono', monospace; }
+    .week-progress-bar {
+      width: 80px;
+      height: 4px;
+      background: var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .week-progress-fill {
+      height: 100%;
+      background: var(--done-text);
+      border-radius: 99px;
+      transition: width 0.4s ease;
     }
 
-    function renderDashboard() {
-      app.innerHTML = `
-        <div class="min-h-screen bg-slate-50 p-6 md:p-10">
-          <div class="max-w-7xl mx-auto">
-            <div class="flex justify-between items-center mb-8">
-              <div>
-                <h1 class="text-3xl font-semibold">Training Plan</h1>
-                <p class="text-slate-500">Logged in as ${currentUser.email}</p>
-              </div>
-              <button id="logoutBtn" class="border px-4 py-2 rounded-xl">Logout</button>
-            </div>
+    .week-body {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 12px 12px;
+    }
+    .week-body.open { display: block; }
 
-            <div class="overflow-x-auto bg-white rounded-3xl shadow-sm">
-              <table class="w-full text-sm">
-                <thead class="bg-slate-100 text-left">
-                  <tr>
-                    <th class="p-4">Date</th>
-                    <th class="p-4">Suggested Workout</th>
-                    <th class="p-4 min-w-[420px]">Your Actual Workout</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${days.map(day => `
-                    <tr class="border-t align-top">
-                      <td class="p-4 whitespace-nowrap">${day.day_name}<br><span class="text-slate-400">${day.date_range}</span></td>
-                      <td class="p-4">
-                        <div class="font-medium">${day.session_type}</div>
-                        <div class="text-slate-600 mt-1">${day.suggested_workout}</div>
-                      </td>
-                      <td class="p-4">
-                        <textarea
-                          data-day="${day.id}"
-                          class="w-full min-h-28 border rounded-xl p-3"
-                          placeholder="What did you actually do?"
-                        >${getLog(day.id, currentUser.id)?.actual_workout || ''}</textarea>
-                        <button data-save="${day.id}" class="mt-2 bg-black text-white px-4 py-2 rounded-lg">Save</button>
-                      </td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>`
+    /* ── DAY ROW ── */
+    .day-row {
+      display: grid;
+      grid-template-columns: 120px 1fr 1fr;
+      gap: 0;
+      border-top: 1px solid var(--border);
+    }
+    .day-row:first-child { border-top: none; }
 
-      document.getElementById('logoutBtn').onclick = () => supabase.auth.signOut()
+    .day-cell {
+      padding: 1rem 1.25rem;
+      border-right: 1px solid var(--border);
+    }
+    .day-cell:last-child { border-right: none; }
 
-      document.querySelectorAll('[data-save]').forEach(btn => {
-        btn.onclick = async () => {
-          const dayId = Number(btn.dataset.save)
-          const textarea = document.querySelector(`[data-day="${dayId}"]`)
-          await saveWorkout(dayId, textarea.value)
-        }
-      })
+    .day-name {
+      font-weight: 600;
+      font-size: 0.85rem;
+      margin-bottom: 0.2rem;
+    }
+    .day-date {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--muted);
     }
 
-    init()
-  </script>
+    /* ── SUGGESTED WORKOUT ── */
+    .session-type {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 0.2rem 0.55rem;
+      border-radius: 99px;
+      background: var(--tag-base);
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .suggested-text {
+      font-size: 0.85rem;
+      color: #3a3834;
+      line-height: 1.5;
+      margin-bottom: 0.75rem;
+    }
+
+    /* ── DONE TOGGLE ── */
+    .done-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 8px;
+      border: 1.5px solid var(--border);
+      background: transparent;
+      font-family: inherit;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .done-toggle:hover { border-color: var(--done-border); color: var(--done-text); }
+    .done-toggle.done {
+      background: var(--done-bg);
+      border-color: var(--done-border);
+      color: var(--done-text);
+    }
+    .done-icon { font-size: 0.9rem; }
+
+    /* ── ACTUAL WORKOUT ── */
+    .actual-area { display: flex; flex-direction: column; gap: 0.5rem; }
+    .actual-textarea {
+      width: 100%;
+      min-height: 80px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.65rem 0.85rem;
+      font-family: inherit;
+      font-size: 0.82rem;
+      background: var(--bg);
+      resize: vertical;
+      outline: none;
+      line-height: 1.5;
+      transition: border-color 0.15s;
+    }
+    .actual-textarea:focus { border-color: var(--text); background: #fff; }
+    .save-btn {
+      align-self: flex-start;
+      background: var(--text);
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      padding: 0.4rem 0.9rem;
+      font-family: inherit;
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .save-btn:hover { opacity: 0.8; }
+
+    /* ── OTHERS WORKOUTS ── */
+    .others-section { margin-top: 0.75rem; }
+    .others-toggle {
+      background: none;
+      border: none;
+      font-family: inherit;
+      font-size: 0.78rem;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .others-toggle:hover { color: var(--text); }
+    .others-list {
+      margin-top: 0.6rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .other-entry {
+      background: #faf8f5;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.6rem 0.85rem;
+      font-size: 0.8rem;
+    }
+    .other-entry-name {
+      font-weight: 600;
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 0.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .other-entry-done {
+      display: inline-block;
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--done-text);
+    }
+    .other-entry-text { line-height: 1.45; color: #3a3834; }
+
+    /* ── ANALYSIS TAB ── */
+    .analysis-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+    }
+    .stat-label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.4rem;
+    }
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 600;
+      letter-spacing: -0.04em;
+      font-family: 'DM Mono', monospace;
+    }
+    .stat-sub { font-size: 0.8rem; color: var(--muted); margin-top: 0.2rem; }
+
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .chart-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 1.25rem;
+    }
+    .bar-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .bar-label { width: 120px; font-size: 0.82rem; flex-shrink: 0; }
+    .bar-track {
+      flex: 1;
+      height: 10px;
+      background: var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      background: var(--text);
+      border-radius: 99px;
+      transition: width 0.6s ease;
+    }
+    .bar-pct { width: 42px; text-align: right; font-size: 0.8rem; color: var(--muted); font-family: 'DM Mono', monospace; }
+
+    .loading { padding: 3rem; text-align: center; color: var(--muted); font-size: 0.9rem; }
+  </style>
 </head>
 <body>
-  <div id="app"></div>
+<div id="app"><div class="loading">Wird geladen…</div></div>
+
+<script type="module">
+  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+  const SUPABASE_URL = 'https://xidyfsiqxotfzypxcqkg.supabase.co/'
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhpZHlmc2lxeG90Znp5cHhjcWtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MDczMjcsImV4cCI6MjA5NTI4MzMyN30.8unCWpOMpbHvwuIUkt1Yxc_QgLOJbLHsAW0tWzXkBK4'
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+  const app = document.getElementById('app')
+  let currentUser = null
+  let days = []
+  let workoutLogs = []   // all users' logs
+  let allUsers = {}      // user_id -> display label (email prefix)
+  let activeTab = 'plan'
+  let openWeeks = new Set()
+  let shownOthers = new Set() // day ids with others panel open
+
+  // ── HELPERS ──────────────────────────────────────────────
+  function parseDate(str) {
+    // str might be "2024-05-13" or "Mon 13.05." etc – try ISO first
+    if (!str) return null
+    const iso = str.match(/(\d{4}-\d{2}-\d{2})/)
+    if (iso) return new Date(iso[1])
+    return null
+  }
+
+  function formatDate(str) {
+    // Try to extract and format a real date from date_range
+    if (!str) return str
+    const iso = str.match(/(\d{4}-\d{2}-\d{2})/)
+    if (iso) {
+      const d = new Date(iso[1])
+      return d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })
+    }
+    return str // fallback to raw value
+  }
+
+  function groupByWeek(days) {
+    const weeks = {}
+    for (const d of days) {
+      const k = `Woche ${d.week}`
+      if (!weeks[k]) weeks[k] = { week: d.week, phase: d.phase, days: [] }
+      weeks[k].days.push(d)
+    }
+    return Object.values(weeks).sort((a, b) => a.week - b.week)
+  }
+
+  function getMyLog(dayId) {
+    return workoutLogs.find(l => l.day_id === dayId && l.user_id === currentUser.id)
+  }
+
+  function getOtherLogs(dayId) {
+    return workoutLogs.filter(l => l.day_id === dayId && l.user_id !== currentUser.id)
+  }
+
+  function userLabel(uid) {
+    return allUsers[uid] || uid.slice(0, 8)
+  }
+
+  function weekDoneCount(weekDays) {
+    return weekDays.filter(d => getMyLog(d.id)?.completed).length
+  }
+
+  // ── INIT ─────────────────────────────────────────────────
+  async function init() {
+    const { data: { session } } = await supabase.auth.getSession()
+    currentUser = session?.user ?? null
+    currentUser ? loadDashboard() : renderAuth()
+    supabase.auth.onAuthStateChange((_e, s) => {
+      currentUser = s?.user ?? null
+      currentUser ? loadDashboard() : renderAuth()
+    })
+  }
+
+  // ── AUTH ─────────────────────────────────────────────────
+  function renderAuth() {
+    app.innerHTML = `
+      <div class="auth-wrap">
+        <div class="auth-card">
+          <h1>Marathon Plan</h1>
+          <p>Bitte einloggen oder registrieren</p>
+          <input id="email" class="auth-input" placeholder="E-Mail" type="email"/>
+          <input id="password" class="auth-input" placeholder="Passwort" type="password"/>
+          <div class="auth-btns">
+            <button class="btn-primary" id="loginBtn">Einloggen</button>
+            <button class="btn-outline" id="signupBtn">Registrieren</button>
+          </div>
+        </div>
+      </div>`
+    document.getElementById('loginBtn').onclick = () =>
+      supabase.auth.signInWithPassword({ email: document.getElementById('email').value, password: document.getElementById('password').value })
+    document.getElementById('signupBtn').onclick = () =>
+      supabase.auth.signUp({ email: document.getElementById('email').value, password: document.getElementById('password').value })
+  }
+
+  // ── LOAD DATA ─────────────────────────────────────────────
+  async function loadDashboard() {
+    const [{ data: planDays }, { data: logs }] = await Promise.all([
+      supabase.from('days').select('id,week,phase,day_name,session_type,duration,suggested_workout,date_range').order('id'),
+      supabase.from('workout_logs').select('*').order('updated_at')
+    ])
+    days = planDays || []
+    workoutLogs = logs || []
+
+    // Build user labels from logs
+    for (const l of workoutLogs) {
+      if (!allUsers[l.user_id]) allUsers[l.user_id] = l.user_email || l.user_id.slice(0, 8)
+    }
+
+    // Try to get own email label
+    if (currentUser?.email) allUsers[currentUser.id] = currentUser.email.split('@')[0]
+
+    renderApp()
+  }
+
+  // ── SAVE ─────────────────────────────────────────────────
+  async function saveWorkout(dayId, text, completed) {
+    const existing = getMyLog(dayId)
+    if (existing) {
+      await supabase.from('workout_logs').update({ actual_workout: text, completed }).eq('id', existing.id)
+    } else {
+      await supabase.from('workout_logs').insert({ day_id: dayId, user_id: currentUser.id, actual_workout: text, completed })
+    }
+    loadDashboard()
+  }
+
+  async function toggleDone(dayId) {
+    const log = getMyLog(dayId)
+    const text = log?.actual_workout || ''
+    const completed = !(log?.completed)
+    await saveWorkout(dayId, text, completed)
+  }
+
+  // ── RENDER APP ───────────────────────────────────────────
+  function renderApp() {
+    app.innerHTML = `
+      <div class="shell">
+        <div class="topbar">
+          <div>
+            <h1>Training Plan</h1>
+            <div class="sub">${currentUser.email}</div>
+          </div>
+          <button class="btn-logout" id="logoutBtn">Logout</button>
+        </div>
+        <div class="tabs">
+          <button class="tab ${activeTab === 'plan' ? 'active' : ''}" data-tab="plan">Trainingsplan</button>
+          <button class="tab ${activeTab === 'analysis' ? 'active' : ''}" data-tab="analysis">Analyse</button>
+        </div>
+        <div id="tabContent"></div>
+      </div>`
+
+    document.getElementById('logoutBtn').onclick = () => supabase.auth.signOut()
+    document.querySelectorAll('.tab').forEach(t => {
+      t.onclick = () => { activeTab = t.dataset.tab; renderApp() }
+    })
+
+    if (activeTab === 'plan') renderPlan()
+    else renderAnalysis()
+  }
+
+  // ── PLAN TAB ─────────────────────────────────────────────
+  function renderPlan() {
+    const weeks = groupByWeek(days)
+    const container = document.getElementById('tabContent')
+    container.innerHTML = weeks.map(w => renderWeek(w)).join('')
+
+    // Wire up week toggles
+    container.querySelectorAll('.week-header').forEach(hdr => {
+      hdr.onclick = () => {
+        const wk = hdr.dataset.week
+        openWeeks.has(wk) ? openWeeks.delete(wk) : openWeeks.add(wk)
+        hdr.classList.toggle('open')
+        const body = document.getElementById(`week-body-${wk}`)
+        body.classList.toggle('open')
+        hdr.querySelector('.week-chevron').textContent = openWeeks.has(wk) ? '▶' : '▶'
+      }
+    })
+
+    // Done toggle buttons
+    container.querySelectorAll('.done-toggle').forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation()
+        toggleDone(Number(btn.dataset.day))
+      }
+    })
+
+    // Save buttons
+    container.querySelectorAll('.save-btn').forEach(btn => {
+      btn.onclick = () => {
+        const dayId = Number(btn.dataset.day)
+        const ta = container.querySelector(`.actual-textarea[data-day="${dayId}"]`)
+        const log = getMyLog(dayId)
+        saveWorkout(dayId, ta.value, log?.completed || false)
+      }
+    })
+
+    // Others toggle
+    container.querySelectorAll('.others-toggle').forEach(btn => {
+      btn.onclick = () => {
+        const dayId = Number(btn.dataset.day)
+        const list = container.querySelector(`.others-list[data-day="${dayId}"]`)
+        shownOthers.has(dayId) ? shownOthers.delete(dayId) : shownOthers.add(dayId)
+        list.style.display = shownOthers.has(dayId) ? 'flex' : 'none'
+        btn.textContent = shownOthers.has(dayId) ? '▲ Andere ausblenden' : `▼ Andere Nutzer anzeigen (${getOtherLogs(dayId).length})`
+      }
+    })
+  }
+
+  function renderWeek(w) {
+    const isOpen = openWeeks.has(String(w.week))
+    const done = weekDoneCount(w.days)
+    const pct = w.days.length ? Math.round((done / w.days.length) * 100) : 0
+    return `
+      <div class="week-block">
+        <div class="week-header ${isOpen ? 'open' : ''}" data-week="${w.week}">
+          <span class="week-chevron">▶</span>
+          <span class="week-title">Woche ${w.week} · ${w.phase || ''}</span>
+          <span class="week-meta">${done}/${w.days.length} erledigt</span>
+          <div class="week-progress-bar"><div class="week-progress-fill" style="width:${pct}%"></div></div>
+        </div>
+        <div class="week-body ${isOpen ? 'open' : ''}" id="week-body-${w.week}">
+          ${w.days.map(d => renderDayRow(d)).join('')}
+        </div>
+      </div>`
+  }
+
+  function renderDayRow(day) {
+    const log = getMyLog(day.id)
+    const completed = !!log?.completed
+    const otherLogs = getOtherLogs(day.id)
+    const showOthers = shownOthers.has(day.id)
+    return `
+      <div class="day-row">
+        <div class="day-cell">
+          <div class="day-name">${day.day_name}</div>
+          <div class="day-date">${formatDate(day.date_range)}</div>
+        </div>
+        <div class="day-cell">
+          <div class="session-type">${day.session_type || ''}</div>
+          <div class="suggested-text">${day.suggested_workout || ''}</div>
+          <button class="done-toggle ${completed ? 'done' : ''}" data-day="${day.id}">
+            <span class="done-icon">${completed ? '✓' : '○'}</span>
+            ${completed ? 'Erledigt' : 'Als erledigt markieren'}
+          </button>
+        </div>
+        <div class="day-cell">
+          <div class="actual-area">
+            <textarea class="actual-textarea" data-day="${day.id}" placeholder="Was hast du tatsächlich gemacht?">${log?.actual_workout || ''}</textarea>
+            <button class="save-btn" data-day="${day.id}">Speichern</button>
+          </div>
+          ${otherLogs.length > 0 ? `
+            <div class="others-section">
+              <button class="others-toggle" data-day="${day.id}">
+                ${showOthers ? '▲ Andere ausblenden' : `▼ Andere Nutzer anzeigen (${otherLogs.length})`}
+              </button>
+              <div class="others-list" data-day="${day.id}" style="display:${showOthers ? 'flex' : 'none'}">
+                ${otherLogs.map(l => `
+                  <div class="other-entry">
+                    <div class="other-entry-name">
+                      ${l.completed ? '<span class="other-entry-done"></span>' : ''}
+                      ${userLabel(l.user_id)}
+                    </div>
+                    <div class="other-entry-text">${l.actual_workout || '<em style="opacity:0.5">Kein Text eingetragen</em>'}</div>
+                  </div>`).join('')}
+              </div>
+            </div>` : ''}
+        </div>
+      </div>`
+  }
+
+  // ── ANALYSIS TAB ──────────────────────────────────────────
+  function renderAnalysis() {
+    const container = document.getElementById('tabContent')
+    const myLogs = workoutLogs.filter(l => l.user_id === currentUser.id)
+    const completedLogs = myLogs.filter(l => l.completed)
+    const totalDays = days.length
+    const doneDays = completedLogs.length
+    const pctTotal = totalDays ? Math.round((doneDays / totalDays) * 100) : 0
+
+    // Group by session_type
+    const byType = {}
+    for (const day of days) {
+      const t = day.session_type || 'Unbekannt'
+      if (!byType[t]) byType[t] = { total: 0, done: 0 }
+      byType[t].total++
+      if (completedLogs.find(l => l.day_id === day.id)) byType[t].done++
+    }
+
+    // Group by week for weekly completion
+    const byWeek = {}
+    for (const day of days) {
+      if (!byWeek[day.week]) byWeek[day.week] = { total: 0, done: 0 }
+      byWeek[day.week].total++
+      if (completedLogs.find(l => l.day_id === day.id)) byWeek[day.week].done++
+    }
+
+    const typeRows = Object.entries(byType)
+      .sort((a, b) => b[1].total - a[1].total)
+      .map(([type, v]) => {
+        const pct = v.total ? Math.round((v.done / v.total) * 100) : 0
+        return `<div class="bar-row">
+          <div class="bar-label">${type}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+          <div class="bar-pct">${pct}%</div>
+        </div>`
+      }).join('')
+
+    const weekRows = Object.entries(byWeek)
+      .sort((a, b) => Number(a[0]) - Number(b[0]))
+      .map(([week, v]) => {
+        const pct = v.total ? Math.round((v.done / v.total) * 100) : 0
+        return `<div class="bar-row">
+          <div class="bar-label">Woche ${week}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+          <div class="bar-pct">${pct}%</div>
+        </div>`
+      }).join('')
+
+    container.innerHTML = `
+      <div class="analysis-grid">
+        <div class="stat-card">
+          <div class="stat-label">Gesamt abgeschlossen</div>
+          <div class="stat-value">${pctTotal}%</div>
+          <div class="stat-sub">${doneDays} von ${totalDays} Einheiten</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Einheiten erledigt</div>
+          <div class="stat-value">${doneDays}</div>
+          <div class="stat-sub">von ${totalDays} geplanten Einheiten</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Ausstehend</div>
+          <div class="stat-value">${totalDays - doneDays}</div>
+          <div class="stat-sub">noch nicht abgehakt</div>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Abschluss nach Trainingsart</div>
+        ${typeRows || '<div style="color:var(--muted);font-size:.85rem">Noch keine Daten</div>'}
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Abschluss nach Woche</div>
+        ${weekRows || '<div style="color:var(--muted);font-size:.85rem">Noch keine Daten</div>'}
+      </div>`
+  }
+
+  init()
+</script>
 </body>
 </html>
-
-<!--
-Create this extra table in Supabase:
-
-create table workout_logs (
-  id bigint generated always as identity primary key,
-  user_id uuid references auth.users on delete cascade not null,
-  day_id integer references days(id) on delete cascade not null,
-  actual_workout text,
-  updated_at timestamptz default now(),
-  unique(user_id, day_id)
-);
-
-Your requested behavior is built in:
-- every user logs in with their own account
-- everyone sees the same suggested workout plan
-- each user gets their own personal 'actual workout' text box per day
-- entries are stored separately by user_id, effectively making each user's own column of notes
--->

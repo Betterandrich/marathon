@@ -91,6 +91,58 @@
       display: none;
     }
     .auth-success.visible { display: block; }
+
+    /* ── USERNAME SETUP ── */
+    .setup-wrap {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+    }
+    .setup-card {
+      width: 100%;
+      max-width: 400px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2.5rem;
+    }
+    .setup-card h2 { font-size: 1.3rem; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 0.3rem; }
+    .setup-card p { color: var(--muted); font-size: 0.85rem; margin-bottom: 1.5rem; line-height: 1.5; }
+    .setup-hint { font-size: 0.78rem; color: var(--muted); margin-top: -0.4rem; margin-bottom: 0.75rem; }
+
+    /* ── SETTINGS TAB ── */
+    .settings-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      max-width: 480px;
+    }
+    .settings-title { font-size: 0.9rem; font-weight: 600; margin-bottom: 1rem; }
+    .settings-row { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1rem; }
+    .settings-label { font-size: 0.78rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .settings-input {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.65rem 0.9rem;
+      font-family: inherit;
+      font-size: 0.9rem;
+      background: var(--bg);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .settings-input:focus { border-color: var(--text); background: #fff; }
+    .settings-feedback {
+      font-size: 0.8rem;
+      margin-top: 0.5rem;
+      min-height: 1.2em;
+    }
+    .settings-feedback.ok { color: var(--done-text); }
+    .settings-feedback.err { color: var(--accent); }
     .btn-primary {
       flex: 1;
       background: var(--text);
@@ -548,11 +600,12 @@
   let currentUser = null
   let days = []
   let workoutLogs = []   // all users' logs
-  let allUsers = {}      // user_id -> display label (email prefix)
+  let allUsers = {}      // user_id -> username
+  let profiles = []      // all profiles from DB
   let activeTab = 'plan'
   let openWeeks = new Set()
-  let shownOthers = new Set() // day ids with others panel open
-  let selectedUsers = new Set() // user ids selected for comparison in analysis
+  let shownOthers = new Set()
+  let selectedUsers = new Set()
 
   // ── HELPERS ──────────────────────────────────────────────
   function parseDate(str) {
@@ -604,11 +657,24 @@
   async function init() {
     const { data: { session } } = await supabase.auth.getSession()
     currentUser = session?.user ?? null
-    currentUser ? loadDashboard() : renderAuth()
-    supabase.auth.onAuthStateChange((_e, s) => {
+    if (currentUser) await checkProfileAndLoad()
+    else renderAuth()
+
+    supabase.auth.onAuthStateChange(async (_e, s) => {
       currentUser = s?.user ?? null
-      currentUser ? loadDashboard() : renderAuth()
+      if (currentUser) await checkProfileAndLoad()
+      else renderAuth()
     })
+  }
+
+  async function checkProfileAndLoad() {
+    const { data: profile } = await supabase
+      .from('profiles').select('username').eq('id', currentUser.id).single()
+    if (!profile?.username) {
+      renderUsernameSetup()
+    } else {
+      loadDashboard()
+    }
   }
 
   // ── AUTH ─────────────────────────────────────────────────
@@ -687,22 +753,80 @@
     }
   }
 
-  // ── LOAD DATA ─────────────────────────────────────────────
+  // ── USERNAME SETUP (first login) ─────────────────────────
+  function renderUsernameSetup() {
+    app.innerHTML = `
+      <div class="setup-wrap">
+        <div class="setup-card">
+          <h2>Willkommen! 👋</h2>
+          <p>Wähle einen Anzeigenamen. Dieser wird anderen Nutzern im Trainingsplan und in der Analyse angezeigt.</p>
+          <input id="usernameInput" class="auth-input" placeholder="z.B. Max, Anna_M, Läufer42" maxlength="30"/>
+          <div class="setup-hint">3–30 Zeichen, keine Leerzeichen</div>
+          <div class="auth-error" id="setupError"></div>
+          <button class="btn-primary" id="saveUsernameBtn" style="width:100%;margin-top:0.25rem">Weiter</button>
+        </div>
+      </div>`
+
+    const input = document.getElementById('usernameInput')
+    const errEl = document.getElementById('setupError')
+
+    function showErr(msg) { errEl.textContent = msg; errEl.classList.add('visible') }
+    function clearErr() { errEl.classList.remove('visible') }
+
+    async function save() {
+      clearErr()
+      const val = input.value.trim().replace(/\s+/g, '_')
+      if (val.length < 3) { showErr('Mindestens 3 Zeichen erforderlich.'); return }
+      if (val.length > 30) { showErr('Maximal 30 Zeichen erlaubt.'); return }
+
+      document.getElementById('saveUsernameBtn').textContent = '…'
+      document.getElementById('saveUsernameBtn').disabled = true
+
+      // Check uniqueness
+      const { data: existing } = await supabase
+        .from('profiles').select('id').eq('username', val).neq('id', currentUser.id).single()
+      if (existing) {
+        showErr('Dieser Name ist bereits vergeben. Bitte wähle einen anderen.')
+        document.getElementById('saveUsernameBtn').textContent = 'Weiter'
+        document.getElementById('saveUsernameBtn').disabled = false
+        return
+      }
+
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({ id: currentUser.id, username: val }, { onConflict: 'id' })
+
+      if (error) {
+        showErr('Fehler beim Speichern. Bitte versuche es erneut.')
+        document.getElementById('saveUsernameBtn').textContent = 'Weiter'
+        document.getElementById('saveUsernameBtn').disabled = false
+      } else {
+        loadDashboard()
+      }
+    }
+
+    document.getElementById('saveUsernameBtn').onclick = save
+    input.onkeydown = e => { if (e.key === 'Enter') save() }
+  }
   async function loadDashboard() {
-    const [{ data: planDays }, { data: logs }] = await Promise.all([
+    const [{ data: planDays }, { data: logs }, { data: profileData }] = await Promise.all([
       supabase.from('days').select('id,week,phase,day_name,session_type,duration,suggested_workout,date_range').order('id'),
-      supabase.from('workout_logs').select('*').order('updated_at')
+      supabase.from('workout_logs').select('*').order('updated_at'),
+      supabase.from('profiles').select('id,username')
     ])
     days = planDays || []
     workoutLogs = logs || []
+    profiles = profileData || []
 
-    // Build user labels from logs
-    for (const l of workoutLogs) {
-      if (!allUsers[l.user_id]) allUsers[l.user_id] = l.user_email || l.user_id.slice(0, 8)
+    // Build allUsers map from profiles
+    allUsers = {}
+    for (const p of profiles) {
+      allUsers[p.id] = p.username || p.id.slice(0, 8)
     }
-
-    // Try to get own email label
-    if (currentUser?.email) allUsers[currentUser.id] = currentUser.email.split('@')[0]
+    // Fallback for any user_id in logs not in profiles
+    for (const l of workoutLogs) {
+      if (!allUsers[l.user_id]) allUsers[l.user_id] = l.user_id.slice(0, 8)
+    }
 
     renderApp()
   }
@@ -727,18 +851,20 @@
 
   // ── RENDER APP ───────────────────────────────────────────
   function renderApp() {
+    const myUsername = allUsers[currentUser.id] || currentUser.email
     app.innerHTML = `
       <div class="shell">
         <div class="topbar">
           <div>
             <h1>Training Plan</h1>
-            <div class="sub">${currentUser.email}</div>
+            <div class="sub">Hallo, <strong>${myUsername}</strong> · ${currentUser.email}</div>
           </div>
           <button class="btn-logout" id="logoutBtn">Logout</button>
         </div>
         <div class="tabs">
           <button class="tab ${activeTab === 'plan' ? 'active' : ''}" data-tab="plan">Trainingsplan</button>
           <button class="tab ${activeTab === 'analysis' ? 'active' : ''}" data-tab="analysis">Analyse</button>
+          <button class="tab ${activeTab === 'settings' ? 'active' : ''}" data-tab="settings">Einstellungen</button>
         </div>
         <div id="tabContent"></div>
       </div>`
@@ -749,7 +875,8 @@
     })
 
     if (activeTab === 'plan') renderPlan()
-    else renderAnalysis()
+    else if (activeTab === 'analysis') renderAnalysis()
+    else renderSettings()
   }
 
   // ── PLAN TAB ─────────────────────────────────────────────
@@ -1001,6 +1128,67 @@
         renderAnalysis()
       }
     })
+  }
+
+  // ── SETTINGS TAB ─────────────────────────────────────────
+  function renderSettings() {
+    const myUsername = allUsers[currentUser.id] || ''
+    const container = document.getElementById('tabContent')
+    container.innerHTML = `
+      <div class="settings-section">
+        <div class="settings-title">Profil</div>
+        <div class="settings-row">
+          <div class="settings-label">Anzeigename</div>
+          <input id="usernameField" class="settings-input" value="${myUsername}" maxlength="30" placeholder="Dein Username"/>
+        </div>
+        <div class="settings-row">
+          <div class="settings-label">E-Mail</div>
+          <input class="settings-input" value="${currentUser.email}" disabled style="opacity:0.5;cursor:not-allowed"/>
+        </div>
+        <button class="btn-primary" id="saveProfileBtn" style="width:auto;padding:0.5rem 1.25rem;font-size:0.85rem">Speichern</button>
+        <div class="settings-feedback" id="profileFeedback"></div>
+      </div>`
+
+    document.getElementById('saveProfileBtn').onclick = async () => {
+      const val = document.getElementById('usernameField').value.trim().replace(/\s+/g, '_')
+      const fb = document.getElementById('profileFeedback')
+      fb.className = 'settings-feedback'
+
+      if (val.length < 3) { fb.textContent = 'Mindestens 3 Zeichen erforderlich.'; fb.classList.add('err'); return }
+      if (val.length > 30) { fb.textContent = 'Maximal 30 Zeichen.'; fb.classList.add('err'); return }
+
+      document.getElementById('saveProfileBtn').textContent = '…'
+      document.getElementById('saveProfileBtn').disabled = true
+
+      // Check uniqueness
+      const { data: existing } = await supabase
+        .from('profiles').select('id').eq('username', val).neq('id', currentUser.id).single()
+      if (existing) {
+        fb.textContent = 'Dieser Name ist bereits vergeben.'
+        fb.classList.add('err')
+        document.getElementById('saveProfileBtn').textContent = 'Speichern'
+        document.getElementById('saveProfileBtn').disabled = false
+        return
+      }
+
+      const { error } = await supabase
+        .from('profiles').upsert({ id: currentUser.id, username: val }, { onConflict: 'id' })
+
+      document.getElementById('saveProfileBtn').textContent = 'Speichern'
+      document.getElementById('saveProfileBtn').disabled = false
+
+      if (error) {
+        fb.textContent = 'Fehler beim Speichern.'
+        fb.classList.add('err')
+      } else {
+        allUsers[currentUser.id] = val
+        fb.textContent = '✓ Gespeichert'
+        fb.classList.add('ok')
+        // Update topbar label without full re-render
+        const subEl = document.querySelector('.topbar .sub strong')
+        if (subEl) subEl.textContent = val
+      }
+    }
   }
 
   init()
